@@ -139,5 +139,9 @@
         "workbench.settings.enableNaturalLanguageSearch": false,
         "yaml.schemas": {
                 "${workspaceFolder}/validation/module_schema.yaml": "${workspaceFolder}/src/modules/*/module.yaml"
-        }
+        },
+        "ros.distro": "melodic",
+        "python.autoComplete.extraPaths": [
+                "/opt/ros/melodic/lib/python2.7/dist-packages"
+        ]
 }
