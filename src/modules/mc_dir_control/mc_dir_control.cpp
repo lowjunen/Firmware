@@ -58,7 +58,7 @@ MulticopterDirectControl::~MulticopterDirectControl()
 bool
 MulticopterDirectControl::init()
 {
-	if (!_vehicle_angular_velocity_sub.registerCallback()) {
+	if (!_att_sub.registerCallback()) {
 		PX4_ERR("vehicle_attitude callback registration failed!");
 		return false;
 	}
@@ -67,33 +67,19 @@ MulticopterDirectControl::init()
 }
 
 void
-MulticopterDirectControl::parameters_updated()
-{
-	// check for parameter updates
-	if (_parameter_update_sub.updated()) {
-		// clear update
-		parameter_update_s pupdate;
-		_parameter_update_sub.copy(&pupdate);
-
-		// update parameters from storage
-		updateParams();
-	}
-}
-
-void
 MulticopterDirectControl::publish_actuator_controls()
 {
 	// zero actuators if not armed
 	if (_vehicle_status.arming_state != vehicle_status_s::ARMING_STATE_ARMED) {
 		for (uint8_t i = 0 ; i < 4 ; i++) {
-			_actuators.control[i] = 0.0f;
+			_actuators.control[i] = 0.05f;
 		}
 
 	} else {
-		_actuators.control[0] = 0.0f;
-		_actuators.control[1] = 0.0f;
-		_actuators.control[2] = 0.0f;
-		_actuators.control[3] = 0.0f;
+		_actuators.control[0] = 0.01f;
+		_actuators.control[1] = 0.03f;
+		_actuators.control[2] = 0.03f;
+		_actuators.control[3] = 0.07f;
 	}
 
 	// note: _actuators.timestamp_sample is set in AirshipAttitudeControl::Run()
@@ -105,7 +91,7 @@ MulticopterDirectControl::publish_actuator_controls()
 void MulticopterDirectControl::Run()
 {
     if (should_exit()) {
-		_vehicle_angular_velocity_sub.unregisterCallback();
+		_att_sub.unregisterCallback();
 		exit_and_cleanup();
 		return;
 	}
@@ -113,23 +99,15 @@ void MulticopterDirectControl::Run()
 	perf_begin(_loop_perf);
 
 	/* run controller on gyro changes */
-	vehicle_angular_velocity_s angular_velocity;
+	vehicle_attitude_s v_att;
 
-	if (_vehicle_angular_velocity_sub.update(&angular_velocity)) {
-
-		const Vector3f rates{angular_velocity.xyz};
-
-		_actuators.timestamp_sample = angular_velocity.timestamp_sample;
-
-		/* run the rate controller immediately after a gyro update */
+	if (_att_sub.update(&v_att)) {
 		publish_actuator_controls();
 
 		/* check for updates in vehicle status topic */
 		if (_vehicle_status_sub.updated()) {
 			_vehicle_status_sub.update(&_vehicle_status);
 		}
-
-		parameters_updated();
 	}
 
 }
