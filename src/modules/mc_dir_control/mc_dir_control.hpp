@@ -77,9 +77,14 @@ private:
 	void Run() override;
 
 	/**
+	 * Check for parameter updates and handle it
+	 */
+	void 	parameters_update();
+
+	/**
 	 * Publish actuator commands.
 	 */
-	void publish_actuator_controls();
+	void 	publish_actuator_controls();
 
 	uORB::Subscription _parameter_update_sub{ORB_ID(parameter_update)};		/**< parameter updates subscription */
 	uORB::Subscription _vehicle_status_sub{ORB_ID(vehicle_status)};			/**< vehicle status subscription */
@@ -92,4 +97,9 @@ private:
 	struct actuator_controls_s 	_actuators {};		/**< actuator controls */
 
 	perf_counter_t	_loop_perf;
+
+	matrix::Matrix<float,4,13> L_ctrl;
+	matrix::Vector<float,4> l_ctrl;
+	matrix::Vector<float,13> x_bar;
+	matrix::Vector<float,4> u_bar;
 };

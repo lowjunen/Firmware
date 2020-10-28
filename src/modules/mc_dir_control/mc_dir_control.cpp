@@ -48,6 +48,18 @@ MulticopterDirectControl::MulticopterDirectControl() :
         _actuators_0_pub(ORB_ID(actuator_controls_0)),
         _loop_perf(perf_alloc(PC_ELAPSED, "Multicopter Direct Control"))
 {
+	L_ctrl = zeros<float,4,13>();
+	l_ctrl(0) = 0.03;
+	l_ctrl(1) = 0.03;
+	l_ctrl(2) = 0.03;
+	l_ctrl(3) = 0.03;
+
+	x_bar = zeros<float,13,1>();
+
+	u_bar(0) = -0.02;
+	u_bar(1) =  0.00;
+	u_bar(2) =  0.00;
+	u_bar(3) =  0.04;
 }
 
 MulticopterDirectControl::~MulticopterDirectControl()
@@ -67,19 +79,34 @@ MulticopterDirectControl::init()
 }
 
 void
+MulticopterDirectControl::parameters_update()
+{
+	// check for parameter updates
+	if (_parameter_update_sub.updated()) {
+		// clear update
+		parameter_update_s pupdate;
+		_parameter_update_sub.copy(&pupdate);
+
+		// update parameters from storage
+		updateParams();
+	}
+}
+
+void
 MulticopterDirectControl::publish_actuator_controls()
 {
 	// zero actuators if not armed
 	if (_vehicle_status.arming_state != vehicle_status_s::ARMING_STATE_ARMED) {
 		for (uint8_t i = 0 ; i < 4 ; i++) {
-			_actuators.control[i] = 0.05f;
+			_actuators.control[i] = 0.01f;
 		}
 
 	} else {
-		_actuators.control[0] = 0.01f;
-		_actuators.control[1] = 0.03f;
-		_actuators.control[2] = 0.03f;
-		_actuators.control[3] = 0.07f;
+		const Vector<float,4> u_ctrl = u_bar + l_ctrl + (L_ctrl * x_bar);
+		_actuators.control[0] = u_ctrl(0);
+		_actuators.control[1] = u_ctrl(1);
+		_actuators.control[2] = u_ctrl(2);
+		_actuators.control[3] = u_ctrl(3);
 	}
 
 	// note: _actuators.timestamp_sample is set in AirshipAttitudeControl::Run()
@@ -108,8 +135,10 @@ void MulticopterDirectControl::Run()
 		if (_vehicle_status_sub.updated()) {
 			_vehicle_status_sub.update(&_vehicle_status);
 		}
+		parameters_update();
 	}
 
+	perf_end(_loop_perf);
 }
 
 int MulticopterDirectControl::task_spawn(int argc, char *argv[])
