@@ -72,14 +72,14 @@ MulticopterDirectControl::publish_actuator_controls()
 	// zero actuators if not armed
 	if (_vehicle_status.arming_state != vehicle_status_s::ARMING_STATE_ARMED) {
 		for (uint8_t i = 0 ; i < 4 ; i++) {
-			_actuators.control[i] = 0.05f;
+			_actuators.control[i] = 0.00f;
 		}
 
 	} else {
-		_actuators.control[0] = 0.01f;
-		_actuators.control[1] = 0.03f;
-		_actuators.control[2] = 0.03f;
-		_actuators.control[3] = 0.07f;
+		_actuators.control[0] = _rc_channel.channels[0];
+		_actuators.control[1] = 0.00f;
+		_actuators.control[2] = 0.00f;
+		_actuators.control[3] = 0.00f;
 	}
 
 	// note: _actuators.timestamp_sample is set in AirshipAttitudeControl::Run()
@@ -104,6 +104,10 @@ void MulticopterDirectControl::Run()
 	if (_att_sub.update(&v_att)) {
 		publish_actuator_controls();
 
+		/* check for updates to rc_channel topic */
+		if (_rc_channels_sub.updated()) {
+			_rc_channels_sub.update(&_rc_channel);
+		}
 		/* check for updates in vehicle status topic */
 		if (_vehicle_status_sub.updated()) {
 			_vehicle_status_sub.update(&_vehicle_status);
