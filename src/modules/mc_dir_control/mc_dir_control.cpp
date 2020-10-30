@@ -58,51 +58,45 @@ MulticopterDirectControl::~MulticopterDirectControl()
 bool
 MulticopterDirectControl::init()
 {
-	if (!_att_sub.registerCallback()) {
+	if (!_vehicle_angular_velocity_sub.registerCallback()) {
 		PX4_ERR("vehicle_attitude callback registration failed!");
 		return false;
 	}
+	PX4_INFO("mc_dir_control started!");
 
 	return true;
 }
 
-void
-MulticopterDirectControl::publish_actuator_controls()
-{
-	// zero actuators if not armed
-	if (_vehicle_status.arming_state != vehicle_status_s::ARMING_STATE_ARMED) {
-		for (uint8_t i = 0 ; i < 4 ; i++) {
-			_actuators.control[i] = 0.00f;
-		}
-
-	} else {
-		_actuators.control[0] = _rc_channel.channels[0];
-		_actuators.control[1] = 0.00f;
-		_actuators.control[2] = 0.00f;
-		_actuators.control[3] = 0.00f;
-	}
-
-	// note: _actuators.timestamp_sample is set in AirshipAttitudeControl::Run()
-	_actuators.timestamp = hrt_absolute_time();
-
-	_actuators_0_pub.publish(_actuators);
-}
-
 void MulticopterDirectControl::Run()
 {
-    if (should_exit()) {
-		_att_sub.unregisterCallback();
+	if (should_exit()) {
+		_vehicle_angular_velocity_sub.unregisterCallback();
 		exit_and_cleanup();
 		return;
 	}
 
 	perf_begin(_loop_perf);
 
-	/* run controller on gyro changes */
-	vehicle_attitude_s v_att;
+	/* run controller on attitude changes */
+	vehicle_angular_velocity_s angular_velocity;
 
-	if (_att_sub.update(&v_att)) {
-		publish_actuator_controls();
+	if (_vehicle_angular_velocity_sub.update(&angular_velocity)) {
+		const hrt_abstime now = angular_velocity.timestamp_sample;
+
+		// Guard against too small (< 0.125ms) and too large (> 20ms) dt's.
+		_last_run = now;
+
+		// Run Simple Actuator Controller
+		actuator_controls_s actuators{};
+
+		actuators.control[0] = 0.00f;
+		actuators.control[1] = 0.00f;
+		actuators.control[2] = 0.00f;
+		actuators.control[3] = _rc_channel.channels[1];
+
+		actuators.timestamp_sample = angular_velocity.timestamp_sample;
+		actuators.timestamp = hrt_absolute_time();
+		_actuators_0_pub.publish(actuators);
 
 		/* check for updates to rc_channel topic */
 		if (_rc_channels_sub.updated()) {
@@ -114,6 +108,7 @@ void MulticopterDirectControl::Run()
 		}
 	}
 
+	perf_end(_loop_perf);
 }
 
 int MulticopterDirectControl::task_spawn(int argc, char *argv[])
