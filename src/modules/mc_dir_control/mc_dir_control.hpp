@@ -51,8 +51,9 @@
 #include <uORB/topics/parameter_update.h>
 #include <uORB/topics/vehicle_status.h>
 #include <uORB/topics/rc_channels.h>
-#include <uORB/topics/vehicle_attitude.h>
+#include <uORB/topics/vehicle_angular_velocity.h>
 #include <uORB/topics/actuator_controls.h>
+
 
 extern "C" __EXPORT int mc_dir_control_main(int argc, char *argv[]);
 
@@ -76,22 +77,18 @@ public:
 private:
 	void Run() override;
 
-	/**
-	 * Publish actuator commands.
-	 */
-	void publish_actuator_controls();
-
 	uORB::Subscription _parameter_update_sub{ORB_ID(parameter_update)};		/**< parameter updates subscription */
 	uORB::Subscription _vehicle_status_sub{ORB_ID(vehicle_status)};			/**< vehicle status subscription */
 	uORB::Subscription _rc_channels_sub{ORB_ID(rc_channels)};
 
-	uORB::SubscriptionCallbackWorkItem _att_sub{this, ORB_ID(vehicle_attitude)};	/**< vehicle attitude */
+	uORB::SubscriptionCallbackWorkItem _vehicle_angular_velocity_sub{this, ORB_ID(vehicle_angular_velocity)};
 
 	uORB::Publication<actuator_controls_s>	_actuators_0_pub;
 
 	struct vehicle_status_s		_vehicle_status {};	/**< vehicle status */
 	struct rc_channels_s		_rc_channel {};
-	struct actuator_controls_s 	_actuators {};		/**< actuator controls */
 
 	perf_counter_t	_loop_perf;
+
+	hrt_abstime _last_run{0};
 };
