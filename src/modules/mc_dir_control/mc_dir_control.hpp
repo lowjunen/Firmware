@@ -53,7 +53,7 @@
 #include <uORB/topics/rc_channels.h>
 #include <uORB/topics/vehicle_angular_velocity.h>
 #include <uORB/topics/actuator_controls.h>
-
+#include <uORB/topics/trajectory_nominal.h>
 
 extern "C" __EXPORT int mc_dir_control_main(int argc, char *argv[]);
 
