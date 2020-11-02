@@ -1842,10 +1842,10 @@ MavlinkReceiver::handle_message_trajectory_nominal(mavlink_message_t *msg)
 
 	struct trajectory_nominal_s trajectory_nominal{};
 
-	trajectory_nominal.timestamp = trajectory_nominal.timestamp;
+	trajectory_nominal.timestamp = trajectory.timestamp;
 
 	for (int i = 0; i < 20 ; i++) {
-		trajectory_nominal.f_out[i] = trajectory_nominal.f_out[i];
+		trajectory_nominal.f_out[i] = trajectory.f_out[i];
 	}
 	_trajectory_nominal_pub.publish(trajectory_nominal);
 }
