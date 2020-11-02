@@ -86,18 +86,6 @@ void MulticopterDirectControl::Run()
 		// Guard against too small (< 0.125ms) and too large (> 20ms) dt's.
 		_last_run = now;
 
-		// Run Simple Actuator Controller
-		actuator_controls_s actuators{};
-
-		actuators.control[0] = 0.00f;
-		actuators.control[1] = 0.00f;
-		actuators.control[2] = 0.00f;
-		actuators.control[3] = _rc_channel.channels[1];
-
-		actuators.timestamp_sample = angular_velocity.timestamp_sample;
-		actuators.timestamp = hrt_absolute_time();
-		_actuators_0_pub.publish(actuators);
-
 		/* check for updates to rc_channel topic */
 		if (_rc_channels_sub.updated()) {
 			_rc_channels_sub.update(&_rc_channel);
@@ -106,6 +94,23 @@ void MulticopterDirectControl::Run()
 		if (_vehicle_status_sub.updated()) {
 			_vehicle_status_sub.update(&_vehicle_status);
 		}
+		/* check for updates in trajectory nominal topic */
+		if (_trajectory_nominal_sub.updated()) {
+			_trajectory_nominal_sub.update(&_trajectory_nominal);
+		}
+
+		// Run Simple Actuator Controller
+		actuator_controls_s actuators{};
+
+		actuators.control[0] = 0.01f*_trajectory_nominal.f_out[3];
+		actuators.control[1] = 0.01f*_trajectory_nominal.f_out[2];
+		actuators.control[2] = 0.01f*_trajectory_nominal.f_out[1];
+		actuators.control[3] = 0.01f*_trajectory_nominal.f_out[0];
+
+		actuators.timestamp_sample = angular_velocity.timestamp_sample;
+		actuators.timestamp = hrt_absolute_time();
+		_actuators_0_pub.publish(actuators);
+
 	}
 
 	perf_end(_loop_perf);
