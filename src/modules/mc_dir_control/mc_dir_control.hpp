@@ -80,13 +80,15 @@ private:
 	uORB::Subscription _parameter_update_sub{ORB_ID(parameter_update)};		/**< parameter updates subscription */
 	uORB::Subscription _vehicle_status_sub{ORB_ID(vehicle_status)};			/**< vehicle status subscription */
 	uORB::Subscription _rc_channels_sub{ORB_ID(rc_channels)};
+	uORB::Subscription _trajectory_nominal_sub{ORB_ID(trajectory_nominal)};
 
 	uORB::SubscriptionCallbackWorkItem _vehicle_angular_velocity_sub{this, ORB_ID(vehicle_angular_velocity)};
 
 	uORB::Publication<actuator_controls_s>	_actuators_0_pub;
 
-	struct vehicle_status_s		_vehicle_status {};	/**< vehicle status */
+	struct vehicle_status_s		_vehicle_status {};
 	struct rc_channels_s		_rc_channel {};
+	struct trajectory_nominal_s	_trajectory_nominal {};
 
 	perf_counter_t	_loop_perf;
 
