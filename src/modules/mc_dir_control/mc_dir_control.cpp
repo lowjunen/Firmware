@@ -102,10 +102,10 @@ void MulticopterDirectControl::Run()
 		// Run Simple Actuator Controller
 		actuator_controls_s actuators{};
 
-		actuators.control[0] = 0.01f*_trajectory_nominal.f_out[3];
-		actuators.control[1] = 0.01f*_trajectory_nominal.f_out[2];
-		actuators.control[2] = 0.01f*_trajectory_nominal.f_out[1];
-		actuators.control[3] = 0.01f*_trajectory_nominal.f_out[0];
+		actuators.control[0] = 0.00f;
+		actuators.control[1] = 0.00f;
+		actuators.control[2] = 0.00f;
+		actuators.control[3] = 0.01f;
 
 		actuators.timestamp_sample = angular_velocity.timestamp_sample;
 		actuators.timestamp = hrt_absolute_time();
