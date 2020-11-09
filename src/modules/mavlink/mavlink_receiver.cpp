@@ -238,6 +238,10 @@ MavlinkReceiver::handle_message(mavlink_message_t *msg)
 		handle_message_obstacle_distance(msg);
 		break;
 
+	case MAVLINK_MSG_ID_TRAJECTORY_NOMINAL:
+		handle_message_trajectory_nominal(msg);
+		break;
+
 	case MAVLINK_MSG_ID_TRAJECTORY_REPRESENTATION_BEZIER:
 		handle_message_trajectory_representation_bezier(msg);
 		break;
@@ -1828,6 +1832,22 @@ MavlinkReceiver::handle_message_obstacle_distance(mavlink_message_t *msg)
 	obstacle_distance.frame = mavlink_obstacle_distance.frame;
 
 	_obstacle_distance_pub.publish(obstacle_distance);
+}
+
+void
+MavlinkReceiver::handle_message_trajectory_nominal(mavlink_message_t *msg)
+{
+	mavlink_trajectory_nominal_t trajectory;
+	mavlink_msg_trajectory_nominal_decode(msg, &trajectory);
+
+	struct trajectory_nominal_s trajectory_nominal{};
+
+	trajectory_nominal.timestamp = trajectory.timestamp;
+
+	for (int i = 0; i < 20 ; i++) {
+		trajectory_nominal.f_out[i] = trajectory.f_out[i];
+	}
+	_trajectory_nominal_pub.publish(trajectory_nominal);
 }
 
 void
