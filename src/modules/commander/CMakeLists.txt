@@ -48,9 +48,11 @@ px4_add_module(
 		factory_calibration_storage.cpp
 		gyro_calibration.cpp
 		level_calibration.cpp
+		lm_fit.cpp
 		mag_calibration.cpp
 		rc_calibration.cpp
 		state_machine_helper.cpp
+		worker_thread.cpp
 	DEPENDS
 		circuit_breaker
 		failure_detector
@@ -66,3 +68,5 @@ px4_add_module(
 if(PX4_TESTING)
 	add_subdirectory(commander_tests)
 endif()
+
+px4_add_unit_gtest(SRC mag_calibration_test.cpp LINKLIBS modules__commander)

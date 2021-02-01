@@ -123,10 +123,24 @@ void Gyroscope::SensorCorrectionsUpdate(bool force)
 	}
 }
 
+bool Gyroscope::set_offset(const Vector3f &offset)
+{
+	if (Vector3f(_offset - offset).longerThan(0.001f)) {
+		_offset = offset;
+
+		_calibration_count++;
+		return true;
+	}
+
+	return false;
+}
+
 void Gyroscope::set_rotation(Rotation rotation)
 {
 	_rotation_enum = rotation;
-	_rotation = get_rot_matrix(rotation);
+
+	// always apply board level adjustments
+	_rotation = Dcmf(GetSensorLevelAdjustment()) * get_rot_matrix(rotation);
 }
 
 void Gyroscope::ParametersUpdate()
@@ -151,8 +165,7 @@ void Gyroscope::ParametersUpdate()
 				SetCalibrationParam(SensorString(), "ROT", _calibration_index, rotation_value);
 			}
 
-			_rotation_enum = static_cast<Rotation>(rotation_value);
-			_rotation = get_rot_matrix(_rotation_enum);
+			set_rotation(static_cast<Rotation>(rotation_value));
 
 		} else {
 			// internal, CAL_GYROx_ROT -1
@@ -162,8 +175,8 @@ void Gyroscope::ParametersUpdate()
 				SetCalibrationParam(SensorString(), "ROT", _calibration_index, -1);
 			}
 
-			_rotation = GetBoardRotation();
-			_rotation_enum = ROTATION_NONE;
+			// internal sensors follow board rotation
+			set_rotation(GetBoardRotation());
 		}
 
 		// CAL_GYROx_PRIO
@@ -182,19 +195,8 @@ void Gyroscope::ParametersUpdate()
 			_priority = new_priority;
 		}
 
-		bool calibration_changed = false;
-
 		// CAL_GYROx_OFF{X,Y,Z}
-		const Vector3f offset = GetCalibrationParamsVector3f(SensorString(), "OFF", _calibration_index);
-
-		if (Vector3f(_offset - offset).norm_squared() > 0.001f * 0.001f) {
-			calibration_changed = true;
-			_offset = offset;
-		}
-
-		if (calibration_changed) {
-			_calibration_count++;
-		}
+		set_offset(GetCalibrationParamsVector3f(SensorString(), "OFF", _calibration_index));
 
 	} else {
 		Reset();

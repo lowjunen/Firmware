@@ -40,6 +40,7 @@
 #include "mag_calibration.h"
 #include "commander_helper.h"
 #include "calibration_routines.h"
+#include "lm_fit.hpp"
 #include "calibration_messages.h"
 #include "factory_calibration_storage.h"
 
@@ -63,6 +64,7 @@
 #include <uORB/topics/sensor_gyro.h>
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_gps_position.h>
+#include <uORB/topics/mag_worker_data.h>
 
 using namespace matrix;
 using namespace time_literals;
@@ -78,6 +80,7 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub, int32_t cal_ma
 /// Data passed to calibration worker routine
 struct mag_worker_data_t {
 	orb_advert_t	*mavlink_log_pub;
+	orb_advert_t	mag_worker_data_pub;
 	bool		append_to_existing_calibration;
 	unsigned	last_mag_progress;
 	unsigned	done_count;
@@ -185,14 +188,14 @@ static calibrate_return check_calibration_result(float offset_x, float offset_y,
 
 	for (unsigned i = 0; i < num_finite; ++i) {
 		if (!PX4_ISFINITE(must_be_finite[i])) {
-			calibration_log_emergency(mavlink_log_pub, "Retry calibration (sphere NaN, #%u)", cur_mag);
+			calibration_log_emergency(mavlink_log_pub, "Retry calibration (sphere NaN, %u)", cur_mag);
 			return calibrate_return_error;
 		}
 	}
 
 	// earth field between 0.25 and 0.65 Gauss
 	if (sphere_radius < 0.2f || sphere_radius >= 0.7f) {
-		calibration_log_emergency(mavlink_log_pub, "Retry calibration (mag #%u sphere radius invaid %.3f)", cur_mag,
+		calibration_log_emergency(mavlink_log_pub, "Retry calibration (mag %u sphere radius invaid %.3f)", cur_mag,
 					  (double)sphere_radius);
 		return calibrate_return_error;
 	}
@@ -202,7 +205,7 @@ static calibrate_return check_calibration_result(float offset_x, float offset_y,
 
 	for (unsigned i = 0; i < num_positive; ++i) {
 		if (should_be_positive[i] <= 0.0f) {
-			calibration_log_emergency(mavlink_log_pub, "Retry calibration (mag #%u with non-positive scale)", cur_mag);
+			calibration_log_emergency(mavlink_log_pub, "Retry calibration (mag %u with non-positive scale)", cur_mag);
 			return calibrate_return_error;
 		}
 	}
@@ -216,7 +219,7 @@ static calibrate_return check_calibration_result(float offset_x, float offset_y,
 		static constexpr float MAG_MAX_OFFSET_LEN = 1.3f;
 
 		if (fabsf(should_be_not_huge[i]) > MAG_MAX_OFFSET_LEN) {
-			calibration_log_critical(mavlink_log_pub, "Warning: mag (#%u) with large offsets", cur_mag);
+			calibration_log_critical(mavlink_log_pub, "Warning: mag %u with large offsets", cur_mag);
 			break;
 		}
 	}
@@ -388,6 +391,38 @@ static calibrate_return mag_calibration_worker(detect_orientation_return orienta
 					}
 				}
 
+				hrt_abstime now = hrt_absolute_time();
+				mag_worker_data_s status;
+				status.timestamp = now;
+				status.timestamp_sample = now;
+				status.done_count = worker_data->done_count;
+				status.calibration_points_perside = worker_data->calibration_points_perside;
+				status.calibration_interval_perside_us = worker_data->calibration_interval_perside_us;
+
+				for (size_t cur_mag = 0; cur_mag < MAX_MAGS; cur_mag++) {
+					status.calibration_counter_total[cur_mag] = worker_data->calibration_counter_total[cur_mag];
+					status.side_data_collected[cur_mag] = worker_data->side_data_collected[cur_mag];
+
+					if (worker_data->calibration[cur_mag].device_id() != 0) {
+						const unsigned int sample = worker_data->calibration_counter_total[cur_mag] - 1;
+						status.x[cur_mag] = worker_data->x[cur_mag][sample];
+						status.y[cur_mag] = worker_data->y[cur_mag][sample];
+						status.z[cur_mag] = worker_data->z[cur_mag][sample];
+
+					} else {
+						status.x[cur_mag] = 0.f;
+						status.y[cur_mag] = 0.f;
+						status.z[cur_mag] = 0.f;
+					}
+				}
+
+				if (worker_data->mag_worker_data_pub == nullptr) {
+					worker_data->mag_worker_data_pub = orb_advertise(ORB_ID(mag_worker_data), &status);
+
+				} else {
+					orb_publish(ORB_ID(mag_worker_data), worker_data->mag_worker_data_pub, &status);
+				}
+
 				calibration_counter_side++;
 
 				unsigned new_progress = progress_percentage(worker_data) +
@@ -435,6 +470,8 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub, int32_t cal_ma
 	calibrate_return result = calibrate_return_ok;
 
 	mag_worker_data_t worker_data{};
+
+	worker_data.mag_worker_data_pub = nullptr;
 
 	// keep and update the existing calibration when we are not doing a full 6-axis calibration
 	worker_data.append_to_existing_calibration = cal_mask < ((1 << 6) - 1);
@@ -533,73 +570,42 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub, int32_t cal_ma
 				// enough to reliably estimate both scales and offsets with 2 sides only (even if the existing calibration
 				// is already close)
 				bool sphere_fit_only = worker_data.calibration_sides <= 2;
+
+				sphere_params sphere_data;
+				sphere_data.radius = sphere_radius[cur_mag];
+				sphere_data.offset = matrix::Vector3f(sphere[cur_mag](0), sphere[cur_mag](1), sphere[cur_mag](2));
+				sphere_data.diag = matrix::Vector3f(diag[cur_mag](0), diag[cur_mag](1), diag[cur_mag](2));
+				sphere_data.offdiag = matrix::Vector3f(offdiag[cur_mag](0), offdiag[cur_mag](1), offdiag[cur_mag](2));
+
 				bool sphere_fit_success = false;
-				{
-					float fitness = 1.0e30f;
-					float sphere_lambda = 1.0f;
-					static constexpr int max_iterations = 100;
+				bool ellipsoid_fit_success = false;
+				int ret = lm_mag_fit(worker_data.x[cur_mag], worker_data.y[cur_mag], worker_data.z[cur_mag],
+						     worker_data.calibration_counter_total[cur_mag], sphere_data, false);
 
-					for (int i = 0; i < max_iterations; i++) {
-						int ret = run_lm_sphere_fit(worker_data.x[cur_mag], worker_data.y[cur_mag], worker_data.z[cur_mag],
-									    fitness, sphere_lambda, worker_data.calibration_counter_total[cur_mag],
-									    &sphere[cur_mag](0), &sphere[cur_mag](1), &sphere[cur_mag](2),
-									    &sphere_radius[cur_mag],
-									    &diag[cur_mag](0), &diag[cur_mag](1), &diag[cur_mag](2),
-									    &offdiag[cur_mag](0), &offdiag[cur_mag](1), &offdiag[cur_mag](2));
+				if (ret == PX4_OK) {
+					sphere_fit_success = true;
+					PX4_INFO("Mag: %d sphere radius: %.4f", cur_mag, (double)sphere_data.radius);
 
-						if (ret == PX4_OK) {
-							sphere_fit_success = true;
+					if (!sphere_fit_only) {
+						int ellipsoid_ret = lm_mag_fit(worker_data.x[cur_mag], worker_data.y[cur_mag], worker_data.z[cur_mag],
+									       worker_data.calibration_counter_total[cur_mag], sphere_data, true);
 
-						} else {
-							// stop here if fit has previously succeeded
-							if (sphere_fit_success) {
-								break;
-							}
+						if (ellipsoid_ret == PX4_OK) {
+							ellipsoid_fit_success  = true;
 						}
-
-						PX4_DEBUG("Mag: %d (%d/%d) sphere fit ret=%d, fitness: %.5f, lambda: %.5f, radius: %.3f, offset: [%.3f, %.3f %.3f]",
-							  cur_mag, i, max_iterations, ret, (double)fitness, (double)sphere_lambda, (double)sphere_radius[cur_mag],
-							  (double)sphere[cur_mag](0), (double)sphere[cur_mag](1), (double)sphere[cur_mag](2));
 					}
-
-					PX4_INFO("Mag: %d sphere fitness: %.5f radius: %.4f", cur_mag, (double)fitness, (double)sphere_radius[cur_mag]);
 				}
 
-				bool ellipsoid_fit_success = false;
+				sphere_radius[cur_mag] = sphere_data.radius;
 
-				if (!sphere_fit_only) {
-					float fitness = 1.0e30f;
-					float ellipsoid_lambda = 1.0f;
-					static constexpr int max_iterations = 100;
-
-					for (int i = 0; i < max_iterations; i++) {
-						int ret = run_lm_ellipsoid_fit(worker_data.x[cur_mag], worker_data.y[cur_mag], worker_data.z[cur_mag],
-									       fitness, ellipsoid_lambda, worker_data.calibration_counter_total[cur_mag],
-									       &sphere[cur_mag](0), &sphere[cur_mag](1), &sphere[cur_mag](2),
-									       &sphere_radius[cur_mag],
-									       &diag[cur_mag](0), &diag[cur_mag](1), &diag[cur_mag](2),
-									       &offdiag[cur_mag](0), &offdiag[cur_mag](1), &offdiag[cur_mag](2));
-
-						if (ret == PX4_OK) {
-							ellipsoid_fit_success = true;
-
-						} else {
-							// stop here if fit has previously succeeded
-							if (ellipsoid_fit_success) {
-								break;
-							}
-						}
-
-						PX4_DEBUG("Mag: %d (%d/%d) ellipsoid fit ret=%d, fitness: %.5f, lambda: %.5f, radius: %.3f, offset: [%.3f, %.3f %.3f]",
-							  cur_mag, i, max_iterations, ret, (double)fitness, (double)ellipsoid_lambda, (double)sphere_radius[cur_mag],
-							  (double)sphere[cur_mag](0), (double)sphere[cur_mag](1), (double)sphere[cur_mag](2));
-					}
-
-					PX4_INFO("Mag: %d ellipsoid fitness: %.5f", cur_mag, (double)fitness);
+				for (int i = 0; i < 3; i++) {
+					sphere[cur_mag](i) = sphere_data.offset(i);
+					diag[cur_mag](i) = sphere_data.diag(i);
+					offdiag[cur_mag](i) = sphere_data.offdiag(i);
 				}
 
 				if (!sphere_fit_success && !ellipsoid_fit_success) {
-					calibration_log_emergency(mavlink_log_pub, "Retry calibration (unable to fit mag #%u)", cur_mag);
+					calibration_log_emergency(mavlink_log_pub, "Retry calibration (unable to fit mag %u)", cur_mag);
 					result = calibrate_return_error;
 					break;
 				}
@@ -680,7 +686,7 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub, int32_t cal_ma
 			// only proceed if there's a valid internal
 			if (internal_index >= 0) {
 
-				const Dcmf board_rotation = calibration::GetBoardRotation();
+				const Dcmf board_rotation = calibration::GetBoardRotationMatrix();
 
 				// apply new calibrations to all raw sensor data before comparison
 				for (unsigned cur_mag = 0; cur_mag < MAX_MAGS; cur_mag++) {
@@ -737,9 +743,6 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub, int32_t cal_ma
 
 							// FALLTHROUGH
 							case ROTATION_PITCH_180_YAW_270: // skip 27, same as 10 ROTATION_ROLL_180_YAW_90
-
-							// FALLTHROUGH
-							case ROTATION_ROLL_270_YAW_180:  // skip 41, same as 31 ROTATION_ROLL_90_PITCH_180
 								MSE[r] = FLT_MAX;
 								break;
 
@@ -906,16 +909,6 @@ calibrate_return mag_calibrate_all(orb_advert_t *mavlink_log_pub, int32_t cal_ma
 		}
 
 		if (param_save) {
-			// reset the learned EKF mag in-flight bias offsets which have been learned for the previous
-			//  sensor calibration and will be invalidated by a new sensor calibration
-			for (int axis = 0; axis < 3; axis++) {
-				char axis_char = 'X' + axis;
-				char str[20] {};
-				sprintf(str, "EKF2_MAGBIAS_%c", axis_char);
-				float offset = 0.f;
-				param_set_no_notification(param_find(str), &offset);
-			}
-
 			param_notify_changes();
 		}
 

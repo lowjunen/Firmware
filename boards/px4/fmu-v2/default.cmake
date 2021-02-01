@@ -6,6 +6,7 @@ px4_add_board(
 	LABEL default
 	TOOLCHAIN arm-none-eabi
 	ARCHITECTURE cortex-m4
+	CONSTRAINED_MEMORY
 	ROMFSROOT px4fmu_common
 	BOOTLOADER ${PX4_SOURCE_DIR}/ROMFS/px4fmu_common/extras/px4fmuv3_bl.bin
 	IO px4_io-v2_default
@@ -76,6 +77,7 @@ px4_add_board(
 		ekf2
 		#esc_battery
 		#events
+		flight_mode_manager
 		fw_att_control
 		fw_pos_control_l1
 		land_detector
@@ -105,6 +107,7 @@ px4_add_board(
 		hardfault_log
 		#i2cdetect
 		#led_control
+		mft
 		mixer
 		#motor_ramp
 		#motor_test
@@ -122,7 +125,7 @@ px4_add_board(
 		#topic_listener
 		tune_control
 		#usb_connected
-		ver
+		#ver
 		#work_queue
 	EXAMPLES
 		#fixedwing_control # Tutorial code from https://px4.io/dev/example_fixedwing_control

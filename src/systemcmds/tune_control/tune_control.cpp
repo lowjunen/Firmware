@@ -60,7 +60,7 @@ static void usage();
 
 static void publish_tune_control(tune_control_s &tune_control)
 {
-	uORB::PublicationQueued<tune_control_s> tune_control_pub{ORB_ID(tune_control)};
+	uORB::Publication<tune_control_s> tune_control_pub{ORB_ID(tune_control)};
 	tune_control.timestamp = hrt_absolute_time();
 	tune_control_pub.publish(tune_control);
 }
@@ -187,9 +187,9 @@ extern "C" __EXPORT int tune_control_main(int argc, char *argv[])
 		}
 
 	} else if (!strcmp(argv[myoptind], "libtest")) {
-		int ret = tunes.set_control(tune_control);
+		Tunes::ControlResult ret = tunes.set_control(tune_control);
 
-		if (ret == -EINVAL) {
+		if (ret == Tunes::ControlResult::InvalidTune) {
 			PX4_WARN("Tune ID not recognized.");
 		}
 

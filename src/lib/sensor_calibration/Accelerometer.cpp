@@ -123,10 +123,36 @@ void Accelerometer::SensorCorrectionsUpdate(bool force)
 	}
 }
 
+bool Accelerometer::set_offset(const Vector3f &offset)
+{
+	if (Vector3f(_offset - offset).longerThan(0.001f)) {
+		_offset = offset;
+
+		_calibration_count++;
+		return true;
+	}
+
+	return false;
+}
+
+bool Accelerometer::set_scale(const Vector3f &scale)
+{
+	if (Vector3f(_scale - scale).longerThan(0.001f)) {
+		_scale = scale;
+
+		_calibration_count++;
+		return true;
+	}
+
+	return false;
+}
+
 void Accelerometer::set_rotation(Rotation rotation)
 {
 	_rotation_enum = rotation;
-	_rotation = get_rot_matrix(rotation);
+
+	// always apply board level adjustments
+	_rotation = Dcmf(GetSensorLevelAdjustment()) * get_rot_matrix(rotation);
 }
 
 void Accelerometer::ParametersUpdate()
@@ -151,8 +177,7 @@ void Accelerometer::ParametersUpdate()
 				SetCalibrationParam(SensorString(), "ROT", _calibration_index, rotation_value);
 			}
 
-			_rotation_enum = static_cast<Rotation>(rotation_value);
-			_rotation = get_rot_matrix(_rotation_enum);
+			set_rotation(static_cast<Rotation>(rotation_value));
 
 		} else {
 			// internal, CAL_ACCx_ROT -1
@@ -162,8 +187,8 @@ void Accelerometer::ParametersUpdate()
 				SetCalibrationParam(SensorString(), "ROT", _calibration_index, -1);
 			}
 
-			_rotation = GetBoardRotation();
-			_rotation_enum = ROTATION_NONE;
+			// internal sensors follow board rotation
+			set_rotation(GetBoardRotation());
 		}
 
 		// CAL_ACCx_PRIO
@@ -182,27 +207,11 @@ void Accelerometer::ParametersUpdate()
 			_priority = new_priority;
 		}
 
-		bool calibration_changed = false;
-
 		// CAL_ACCx_OFF{X,Y,Z}
-		const Vector3f offset = GetCalibrationParamsVector3f(SensorString(), "OFF", _calibration_index);
-
-		if (Vector3f(_offset - offset).norm_squared() > 0.001f * 0.001f) {
-			calibration_changed = true;
-			_offset = offset;
-		}
+		set_offset(GetCalibrationParamsVector3f(SensorString(), "OFF", _calibration_index));
 
 		// CAL_ACCx_SCALE{X,Y,Z}
-		const Vector3f scale = GetCalibrationParamsVector3f(SensorString(), "SCALE", _calibration_index);
-
-		if (Vector3f(_scale - scale).norm_squared() > 0.001f * 0.001f) {
-			calibration_changed = true;
-			_scale = scale;
-		}
-
-		if (calibration_changed) {
-			_calibration_count++;
-		}
+		set_scale(GetCalibrationParamsVector3f(SensorString(), "SCALE", _calibration_index));
 
 	} else {
 		Reset();

@@ -43,6 +43,7 @@
 #include <px4_platform_common/posix.h>
 
 #include <uORB/Subscription.hpp>
+#include <uORB/SubscriptionInterval.hpp>
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/actuator_armed.h>
@@ -62,6 +63,8 @@
 #include "PCA9685.h"
 #include "ocpoc_mmap.h"
 #include "bbblue_pwm_rc.h"
+
+using namespace time_literals;
 
 namespace linux_pwm_out
 {
@@ -260,7 +263,7 @@ void task_main(int argc, char *argv[])
 
 	Mixer::Airmode airmode = Mixer::Airmode::disabled;
 	update_params(airmode);
-	uORB::Subscription parameter_update_sub{ORB_ID(parameter_update)};
+	uORB::SubscriptionInterval parameter_update_sub{ORB_ID(parameter_update), 1_s};
 
 	int rc_channels_sub = -1;
 
@@ -322,7 +325,7 @@ void task_main(int argc, char *argv[])
 			_controls[0].control[0] = 0.f;
 			_controls[0].control[1] = 0.f;
 			_controls[0].control[2] = 0.f;
-			int channel = rc_channels.function[rc_channels_s::RC_CHANNELS_FUNCTION_THROTTLE];
+			int channel = rc_channels.function[rc_channels_s::FUNCTION_THROTTLE];
 
 			if (ret == 0 && channel >= 0 && channel < (int)(sizeof(rc_channels.channels) / sizeof(rc_channels.channels[0]))) {
 				_controls[0].control[3] = rc_channels.channels[channel];
@@ -556,9 +559,9 @@ int linux_pwm_out_main(int argc, char *argv[])
 	}
 
 	/** gets the parameters for the esc's pwm */
-	param_get(param_find("PWM_DISARMED"), &linux_pwm_out::_pwm_disarmed);
-	param_get(param_find("PWM_MIN"), &linux_pwm_out::_pwm_min);
-	param_get(param_find("PWM_MAX"), &linux_pwm_out::_pwm_max);
+	param_get(param_find("PWM_MAIN_DISARM"), &linux_pwm_out::_pwm_disarmed);
+	param_get(param_find("PWM_MAIN_MIN"), &linux_pwm_out::_pwm_min);
+	param_get(param_find("PWM_MAIN_MAX"), &linux_pwm_out::_pwm_max);
 
 	/*
 	 * Start/load the driver.

@@ -43,8 +43,10 @@
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/airspeed.h>
 #include <uORB/topics/battery_status.h>
+#include <uORB/topics/estimator_selector_status.h>
 #include <uORB/topics/estimator_status.h>
 #include <uORB/topics/geofence_result.h>
+#include <uORB/topics/mission_result.h>
 #include <uORB/topics/position_controller_status.h>
 #include <uORB/topics/tecs_status.h>
 #include <uORB/topics/wind_estimate.h>
@@ -285,6 +287,17 @@ private:
 
 	bool write_estimator_status(mavlink_high_latency2_t *msg)
 	{
+		// use primary estimator_status
+		if (_estimator_selector_status_sub.updated()) {
+			estimator_selector_status_s estimator_selector_status;
+
+			if (_estimator_selector_status_sub.copy(&estimator_selector_status)) {
+				if (estimator_selector_status.primary_instance != _estimator_status_sub.get_instance()) {
+					_estimator_status_sub.ChangeInstance(estimator_selector_status.primary_instance);
+				}
+			}
+		}
+
 		estimator_status_s estimator_status;
 
 		if (_estimator_status_sub.update(&estimator_status)) {
@@ -512,7 +525,7 @@ private:
 		tecs_status_s tecs_status;
 
 		if (_tecs_status_sub.update(&tecs_status)) {
-			_airspeed_sp.add_value(tecs_status.airspeed_sp, _update_rate_filtered);
+			_airspeed_sp.add_value(tecs_status.true_airspeed_sp, _update_rate_filtered);
 		}
 	}
 
@@ -618,6 +631,7 @@ private:
 	uORB::Subscription _actuator_1_sub{ORB_ID(actuator_controls_1)};
 	uORB::Subscription _airspeed_sub{ORB_ID(airspeed)};
 	uORB::Subscription _attitude_sp_sub{ORB_ID(vehicle_attitude_setpoint)};
+	uORB::Subscription _estimator_selector_status_sub{ORB_ID(estimator_selector_status)};
 	uORB::Subscription _estimator_status_sub{ORB_ID(estimator_status)};
 	uORB::Subscription _pos_ctrl_status_sub{ORB_ID(position_controller_status)};
 	uORB::Subscription _geofence_sub{ORB_ID(geofence_result)};

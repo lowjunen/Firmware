@@ -17,6 +17,7 @@ jobs:
         check: [
           "check_format",
           "tests",
+          "tests_coverage",
           "px4_fmu-v2_default stack_check",
           "validate_module_configs",
           "shellcheck_all",
@@ -26,7 +27,9 @@ jobs:
           "module_documentation",
           "parameters_metadata",
         ]
-    container: px4io/px4-dev-nuttx-focal:2020-09-14
+    container:
+      image: px4io/px4-dev-nuttx-focal:2020-11-18
+      options: --privileged --ulimit core=-1 --security-opt seccomp=unconfined
     steps:
     - uses: actions/checkout@v1
       with:
@@ -53,6 +56,16 @@ jobs:
           echo "max_size = 400M" >> ~/.ccache/ccache.conf
           ccache -s
           ccache -z
-
+    - name: check environment
+      run: |
+          export
+          ulimit -a
     - name: ${{matrix.check}}
       run: make ${{matrix.check}}
+    - name: upload coverage
+      if: contains(matrix.check, 'coverage')
+      uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        flags: unittests
+        file: coverage/lcov.info

@@ -33,6 +33,7 @@
 
 #include <px4_platform_common/init.h>
 #include <px4_platform_common/px4_config.h>
+#include <px4_platform_common/px4_manifest.h>
 #include <px4_platform_common/console_buffer.h>
 #include <px4_platform_common/defines.h>
 #include <drivers/drv_hrt.h>
@@ -42,7 +43,7 @@
 
 #include <fcntl.h>
 
-int px4_platform_init(void)
+int px4_platform_console_init(void)
 {
 #if !defined(CONFIG_DEV_CONSOLE) && defined(CONFIG_DEV_NULL)
 
@@ -75,11 +76,23 @@ int px4_platform_init(void)
 		}
 
 		return -ENFILE;
+
 	}
 
 #endif
+	return OK;
+}
 
-	int ret = px4_console_buffer_init();
+int px4_platform_init(void)
+{
+
+	int ret = px4_platform_console_init();
+
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = px4_console_buffer_init();
 
 	if (ret < 0) {
 		return ret;
@@ -106,4 +119,10 @@ int px4_platform_init(void)
 	px4::WorkQueueManagerStart();
 
 	return PX4_OK;
+}
+
+int px4_platform_configure(void)
+{
+	return px4_mft_configure(board_get_manifest());
+
 }

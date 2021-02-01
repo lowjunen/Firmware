@@ -48,6 +48,7 @@ set(msg_files
 	collision_constraints.msg
 	collision_report.msg
 	commander_state.msg
+	control_allocator_status.msg
 	cpuload.msg
 	differential_pressure.msg
 	distance_sensor.msg
@@ -56,9 +57,12 @@ set(msg_files
 	esc_report.msg
 	esc_status.msg
 	estimator_innovations.msg
+	estimator_optical_flow_vel.msg
+	estimator_selector_status.msg
 	estimator_sensor_bias.msg
 	estimator_states.msg
 	estimator_status.msg
+	estimator_status_flags.msg
 	follow_target.msg
 	generator_status.msg
 	geofence_result.msg
@@ -75,7 +79,9 @@ set(msg_files
 	led_control.msg
 	log_message.msg
 	logger_status.msg
+	mag_worker_data.msg
 	manual_control_setpoint.msg
+	manual_control_switches.msg
 	mavlink_log.msg
 	mission.msg
 	mission_result.msg
@@ -104,6 +110,7 @@ set(msg_files
 	rc_channels.msg
 	rc_parameter_map.msg
 	rpm.msg
+	rtl_flight_time.msg
 	safety.msg
 	satellite_info.msg
 	sensor_accel.msg
@@ -119,12 +126,12 @@ set(msg_files
 	sensor_preflight_mag.msg
 	sensor_selection.msg
 	sensors_status_imu.msg
-	subsystem_info.msg
 	system_power.msg
 	task_stack_info.msg
 	tecs_status.msg
 	telemetry_status.msg
 	test_motor.msg
+	takeoff_status.msg
 	timesync.msg
 	timesync_status.msg
 	trajectory_bezier.msg
@@ -136,8 +143,10 @@ set(msg_files
 	ulog_stream.msg
 	ulog_stream_ack.msg
 	vehicle_acceleration.msg
+	vehicle_actuator_setpoint.msg
 	vehicle_air_data.msg
 	vehicle_angular_acceleration.msg
+	vehicle_angular_acceleration_setpoint.msg
 	vehicle_angular_velocity.msg
 	vehicle_attitude.msg
 	vehicle_attitude_setpoint.msg
@@ -158,6 +167,8 @@ set(msg_files
 	vehicle_roi.msg
 	vehicle_status.msg
 	vehicle_status_flags.msg
+	vehicle_thrust_setpoint.msg
+	vehicle_torque_setpoint.msg
 	vehicle_trajectory_bezier.msg
 	vehicle_trajectory_waypoint.msg
 	vtol_vehicle_status.msg

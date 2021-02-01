@@ -59,7 +59,6 @@
 #endif
 
 #include <containers/List.hpp>
-#include <drivers/device/ringbuffer.h>
 #include <parameters/param.h>
 #include <perf/perf_counter.h>
 #include <px4_platform_common/cli.h>
@@ -69,13 +68,16 @@
 #include <px4_platform_common/module.h>
 #include <px4_platform_common/module_params.h>
 #include <px4_platform_common/posix.h>
-#include <systemlib/mavlink_log.h>
 #include <systemlib/uthash/utlist.h>
+#include <uORB/Publication.hpp>
 #include <uORB/PublicationMulti.hpp>
-#include <uORB/topics/mavlink_log.h>
-#include <uORB/topics/mission_result.h>
+#include <uORB/SubscriptionInterval.hpp>
+#include <uORB/topics/parameter_update.h>
 #include <uORB/topics/radio_status.h>
 #include <uORB/topics/telemetry_status.h>
+#include <uORB/topics/vehicle_command.h>
+#include <uORB/topics/vehicle_command_ack.h>
+#include <uORB/topics/vehicle_status.h>
 
 #include "mavlink_command_sender.h"
 #include "mavlink_messages.h"
@@ -437,8 +439,6 @@ public:
 
 	void			update_radio_status(const radio_status_s &radio_status);
 
-	ringbuffer::RingBuffer	*get_logbuffer() { return &_logbuffer; }
-
 	unsigned		get_system_type() { return _param_mav_type.get(); }
 
 	Protocol 		get_protocol() const { return _protocol; }
@@ -493,9 +493,6 @@ public:
 		if (_mavlink_ulog) { _mavlink_ulog_stop_requested = true; }
 	}
 
-
-	void set_uorb_main_fd(int fd, unsigned int interval);
-
 	bool ftp_enabled() const { return _ftp_on; }
 
 	bool hash_check_enabled() const { return _param_mav_hash_chk_en.get(); }
@@ -533,7 +530,13 @@ private:
 
 	orb_advert_t		_mavlink_log_pub{nullptr};
 
-	uORB::PublicationMulti<telemetry_status_s> _telem_status_pub{ORB_ID(telemetry_status)};
+	uORB::Publication<vehicle_command_ack_s> _vehicle_command_ack_pub{ORB_ID(vehicle_command_ack)};
+	uORB::PublicationMulti<telemetry_status_s> _telemetry_status_pub{ORB_ID(telemetry_status)};
+
+	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
+	uORB::Subscription _vehicle_command_sub{ORB_ID(vehicle_command)};
+	uORB::Subscription _vehicle_command_ack_sub{ORB_ID(vehicle_command_ack)};
+	uORB::Subscription _vehicle_status_sub{ORB_ID(vehicle_status)};
 
 	bool			_task_running{true};
 	static bool		_boot_complete;
@@ -564,8 +567,6 @@ private:
 	MAVLINK_MODE 		_mode{MAVLINK_MODE_NORMAL};
 
 	mavlink_channel_t	_channel{MAVLINK_COMM_0};
-
-	ringbuffer::RingBuffer	_logbuffer{5, sizeof(mavlink_log_s)};
 
 	pthread_t		_receive_thread {};
 
@@ -607,7 +608,7 @@ private:
 	unsigned		_bytes_tx{0};
 	unsigned		_bytes_txerr{0};
 	unsigned		_bytes_rx{0};
-	uint64_t		_bytes_timestamp{0};
+	hrt_abstime		_bytes_timestamp{0};
 
 #if defined(MAVLINK_UDP)
 	sockaddr_in		_myaddr {};
@@ -673,7 +674,6 @@ private:
 	perf_counter_t _loop_perf{perf_alloc(PC_ELAPSED, MODULE_NAME": tx run elapsed")};                      /**< loop performance counter */
 	perf_counter_t _loop_interval_perf{perf_alloc(PC_INTERVAL, MODULE_NAME": tx run interval")};           /**< loop interval performance counter */
 	perf_counter_t _send_byte_error_perf{perf_alloc(PC_COUNT, MODULE_NAME": send_bytes error")};           /**< send bytes error count */
-	perf_counter_t _send_start_tx_buf_low{perf_alloc(PC_COUNT, MODULE_NAME": send_start tx buffer full")}; /**< available tx buffer smaller than message */
 
 	void			mavlink_update_parameters();
 

@@ -7,6 +7,8 @@ get_property(module_libraries GLOBAL PROPERTY PX4_MODULE_LIBRARIES)
 # CMAKE_CURRENT_BINARY_DIR ''./platforms/posix' to './bin'
 if (NOT CATKIN_DEVEL_PREFIX)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/bin)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_BINARY_DIR}/bin)
 endif()
 
 set(PX4_SHELL_COMMAND_PREFIX "px4-")
@@ -115,7 +117,17 @@ if("${PX4_BOARD}" MATCHES "beaglebone_blue")
 elseif("${PX4_BOARD}" MATCHES "emlid_navio2")
 	target_link_libraries(px4 PRIVATE atomic)
 
+	# vscode launch.json
+	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Debug/launch_rpi.json.in ${PX4_SOURCE_DIR}/.vscode/launch.json COPYONLY)
+
 elseif("${PX4_BOARD}" MATCHES "sitl")
+
+	# vscode launch.json
+	if(${PX4_BOARD_LABEL} MATCHES "replay")
+		configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Debug/launch_replay.json.in ${PX4_SOURCE_DIR}/.vscode/launch.json COPYONLY)
+	else()
+		configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Debug/launch_sim.json.in ${PX4_SOURCE_DIR}/.vscode/launch.json COPYONLY)
+	endif()
 
 	include(sitl_target)
 	if(BUILD_TESTING)

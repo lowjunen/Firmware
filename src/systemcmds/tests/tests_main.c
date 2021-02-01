@@ -114,11 +114,10 @@ const struct {
 	{"search_min",		test_search_min,	0},
 	{"servo",		test_servo,		OPT_NOJIGTEST | OPT_NOALLTEST},
 	{"sleep",		test_sleep,		OPT_NOJIGTEST},
-	{"smoothz", 		test_smooth_z,		0},
 	{"uart_loopback",	test_uart_loopback,	OPT_NOJIGTEST | OPT_NOALLTEST},
 	{"uart_send",		test_uart_send,		OPT_NOJIGTEST | OPT_NOALLTEST},
 	{"versioning",		test_versioning,	0},
-
+	{"cli",			test_cli,		0},
 
 	/* external tests */
 	{"commander",		commander_tests_main,	0},

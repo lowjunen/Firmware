@@ -41,6 +41,36 @@
 
 bool param_modify_on_import(bson_node_t node)
 {
+	// migrate COM_ARM_AUTH -> COM_ARM_AUTH_ID, COM_ARM_AUTH_MET and COM_ARM_AUTH_TO (2020-11-06). This can be removed after the next release (current release=1.11)
+	if (node->type == BSON_INT32) {
+		if (strcmp("COM_ARM_AUTH", node->name) == 0) {
+			union {
+				struct {
+					uint8_t authorizer_system_id;
+					uint16_t auth_method_arm_timeout_msec;
+					uint8_t authentication_method;
+				} __attribute__((packed)) struct_value;
+				int32_t param_value;
+			} old_param;
+			old_param.param_value = node->i;
+
+			int32_t method = old_param.struct_value.authentication_method;
+			param_set_no_notification(param_find("COM_ARM_AUTH_MET"), &method);
+
+			float timeout = old_param.struct_value.auth_method_arm_timeout_msec / 1000.f;
+			param_set_no_notification(param_find("COM_ARM_AUTH_TO"), &timeout);
+
+			strcpy(node->name, "COM_ARM_AUTH_ID");
+			node->i = old_param.struct_value.authorizer_system_id;
+
+			PX4_INFO("migrating COM_ARM_AUTH: %d -> COM_ARM_AUTH_ID:%d, COM_ARM_AUTH_MET: %d and COM_ARM_AUTH_TO: %f",
+				 old_param.param_value,
+				 old_param.struct_value.authorizer_system_id,
+				 method,
+				 (double)timeout);
+		}
+	}
+
 	// migrate MPC_*_VEL_* -> MPC_*_VEL_*_ACC (2020-04-27). This can be removed after the next release (current release=1.10)
 	if (node->type == BSON_DOUBLE) {
 		param_migrate_velocity_gain(node, "MPC_XY_VEL_P");
@@ -108,6 +138,29 @@ bool param_modify_on_import(bson_node_t node)
 		if (strcmp("EKF2_GPS_TAU", node->name) == 0) {
 			strcpy(node->name, "SENS_GPS_TAU");
 			PX4_INFO("copying %s -> %s", "EKF2_GPS_TAU", "SENS_GPS_TAU");
+		}
+	}
+
+	// 2021-01-31 (v1.12 alpha): translate PWM_MIN/PWM_MAX/PWM_DISARMED to PWM_MAIN
+	{
+		if (strcmp("PWM_MIN", node->name) == 0) {
+			strcpy(node->name, "PWM_MAIN_MIN");
+			PX4_INFO("copying %s -> %s", "PWM_MIN", "PWM_MAIN_MIN");
+		}
+
+		if (strcmp("PWM_MAX", node->name) == 0) {
+			strcpy(node->name, "PWM_MAIN_MAX");
+			PX4_INFO("copying %s -> %s", "PWM_MAX", "PWM_MAIN_MAX");
+		}
+
+		if (strcmp("PWM_RATE", node->name) == 0) {
+			strcpy(node->name, "PWM_MAIN_RATE");
+			PX4_INFO("copying %s -> %s", "PWM_RATE", "PWM_MAIN_RATE");
+		}
+
+		if (strcmp("PWM_DISARMED", node->name) == 0) {
+			strcpy(node->name, "PWM_MAIN_DISARM");
+			PX4_INFO("copying %s -> %s", "PWM_DISARMED", "PWM_MAIN_DISARM");
 		}
 	}
 

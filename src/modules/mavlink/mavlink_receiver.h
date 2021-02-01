@@ -55,6 +55,7 @@
 #include <px4_platform_common/module_params.h>
 #include <uORB/Publication.hpp>
 #include <uORB/PublicationMulti.hpp>
+#include <uORB/SubscriptionInterval.hpp>
 #include <uORB/topics/actuator_armed.h>
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_outputs.h>
@@ -107,6 +108,8 @@
 # include <uORB/topics/debug_vect.h>
 #endif // !CONSTRAINED_FLASH
 
+using namespace time_literals;
+
 class Mavlink;
 
 class MavlinkReceiver : public ModuleParams
@@ -121,6 +124,24 @@ public:
 	static void receive_start(pthread_t *thread, Mavlink *parent);
 
 	static void *start_helper(void *context);
+
+	/**
+	 * Get the cruising speed in offboard control
+	 *
+	 * @return the desired cruising speed for the current flight mode
+	 */
+	float get_offb_cruising_speed();
+
+	/**
+	 * Set the cruising speed in offboard control
+	 *
+	 * Passing a negative value or leaving the parameter away will reset the cruising speed
+	 * to its default value.
+	 *
+	 * Sets cruising speed for current flight mode only (resets on mode changes).
+	 *
+	 */
+	void set_offb_cruising_speed(float speed = -1.0f);
 
 private:
 
@@ -150,7 +171,7 @@ private:
 	void handle_message_distance_sensor(mavlink_message_t *msg);
 	void handle_message_follow_target(mavlink_message_t *msg);
 	void handle_message_generator_status(mavlink_message_t *msg);
-	void handle_message_gps_global_origin(mavlink_message_t *msg);
+	void handle_message_set_gps_global_origin(mavlink_message_t *msg);
 	void handle_message_gps_rtcm_data(mavlink_message_t *msg);
 	void handle_message_heartbeat(mavlink_message_t *msg);
 	void handle_message_hil_gps(mavlink_message_t *msg);
@@ -206,11 +227,6 @@ private:
 	void get_message_interval(int msgId);
 
 	/**
-	 * Decode a switch position from a bitfield.
-	 */
-	switch_pos_t decode_switch_pos(uint16_t buttons, unsigned sw);
-
-	/**
 	 * Decode a switch position from a bitfield and state.
 	 */
 	int decode_switch_pos_n(uint16_t buttons, unsigned sw);
@@ -235,6 +251,98 @@ private:
 	MavlinkTimesync			_mavlink_timesync;
 
 	mavlink_status_t		_status{}; ///< receiver status, used for mavlink_parse_char()
+
+	// subset of MAV_COMPONENTs we support
+	enum SUPPORTED_COMPONENTS : uint8_t {
+		COMP_ID_ALL,
+		COMP_ID_AUTOPILOT1,
+
+		COMP_ID_TELEMETRY_RADIO,
+
+		COMP_ID_CAMERA,
+		COMP_ID_CAMERA2,
+
+		COMP_ID_GIMBAL,
+		COMP_ID_LOG,
+		COMP_ID_ADSB,
+		COMP_ID_OSD,
+		COMP_ID_PERIPHERAL,
+
+		COMP_ID_FLARM,
+
+		COMP_ID_GIMBAL2,
+
+		COMP_ID_MISSIONPLANNER,
+		COMP_ID_ONBOARD_COMPUTER,
+
+		COMP_ID_PATHPLANNER,
+		COMP_ID_OBSTACLE_AVOIDANCE,
+		COMP_ID_VISUAL_INERTIAL_ODOMETRY,
+		COMP_ID_PAIRING_MANAGER,
+
+		COMP_ID_IMU,
+
+		COMP_ID_GPS,
+		COMP_ID_GPS2,
+
+		COMP_ID_UDP_BRIDGE,
+		COMP_ID_UART_BRIDGE,
+		COMP_ID_TUNNEL_NODE,
+
+		COMP_ID_MAX
+	};
+
+	// map of supported component IDs to MAV_COMP value
+	const uint8_t supported_component_map[COMP_ID_MAX] {
+		[COMP_ID_ALL]                      = MAV_COMP_ID_ALL,
+		[COMP_ID_AUTOPILOT1]               = MAV_COMP_ID_AUTOPILOT1,
+
+		[COMP_ID_TELEMETRY_RADIO]          = MAV_COMP_ID_TELEMETRY_RADIO,
+
+		[COMP_ID_CAMERA]                   = MAV_COMP_ID_CAMERA,
+		[COMP_ID_CAMERA2]                  = MAV_COMP_ID_CAMERA2,
+
+		[COMP_ID_GIMBAL]                   = MAV_COMP_ID_GIMBAL,
+		[COMP_ID_LOG]                      = MAV_COMP_ID_LOG,
+		[COMP_ID_ADSB]                     = MAV_COMP_ID_ADSB,
+		[COMP_ID_OSD]                      = MAV_COMP_ID_OSD,
+		[COMP_ID_PERIPHERAL]               = MAV_COMP_ID_PERIPHERAL,
+
+		[COMP_ID_FLARM]                    = MAV_COMP_ID_FLARM,
+
+		[COMP_ID_GIMBAL2]                  = MAV_COMP_ID_GIMBAL2,
+
+		[COMP_ID_MISSIONPLANNER]           = MAV_COMP_ID_MISSIONPLANNER,
+		[COMP_ID_ONBOARD_COMPUTER]         = MAV_COMP_ID_ONBOARD_COMPUTER,
+
+		[COMP_ID_PATHPLANNER]              = MAV_COMP_ID_PATHPLANNER,
+		[COMP_ID_OBSTACLE_AVOIDANCE]       = MAV_COMP_ID_OBSTACLE_AVOIDANCE,
+		[COMP_ID_VISUAL_INERTIAL_ODOMETRY] = MAV_COMP_ID_VISUAL_INERTIAL_ODOMETRY,
+		[COMP_ID_PAIRING_MANAGER]          = MAV_COMP_ID_PAIRING_MANAGER,
+
+		[COMP_ID_IMU]                      = MAV_COMP_ID_IMU,
+
+		[COMP_ID_GPS]                      = MAV_COMP_ID_GPS,
+		[COMP_ID_GPS2]                     = MAV_COMP_ID_GPS2,
+
+		[COMP_ID_UDP_BRIDGE]               = MAV_COMP_ID_UDP_BRIDGE,
+		[COMP_ID_UART_BRIDGE]              = MAV_COMP_ID_UART_BRIDGE,
+		[COMP_ID_TUNNEL_NODE]              = MAV_COMP_ID_TUNNEL_NODE,
+	};
+
+	static constexpr int MAX_REMOTE_SYSTEM_IDS{8};
+	uint8_t _system_id_map[MAX_REMOTE_SYSTEM_IDS] {};
+
+	uint8_t  _last_index[MAX_REMOTE_SYSTEM_IDS][COMP_ID_MAX] {};    ///< Store the last received sequence ID for each system/componenet pair
+	uint8_t  _sys_comp_present[MAX_REMOTE_SYSTEM_IDS][COMP_ID_MAX] {}; ///< First message flag
+	uint64_t _total_received_counter{0};                            ///< The total number of successfully received messages
+	uint64_t _total_received_supported_counter{0};                  ///< The total number of successfully received messages
+	uint64_t _total_lost_counter{0};                                ///< Total messages lost during transmission.
+	float    _running_loss_percent{0};                              ///< Loss rate
+
+	uint8_t _mavlink_status_last_buffer_overrun{0};
+	uint8_t _mavlink_status_last_parse_error{0};
+	uint16_t _mavlink_status_last_packet_rx_drop_count{0};
 
 	// ORB publications
 	uORB::Publication<actuator_controls_s>			_actuator_controls_pubs[4] {ORB_ID(actuator_controls_0), ORB_ID(actuator_controls_1), ORB_ID(actuator_controls_2), ORB_ID(actuator_controls_3)};
@@ -283,18 +391,19 @@ private:
 	uORB::PublicationMulti<radio_status_s>			_radio_status_pub{ORB_ID(radio_status)};
 
 	// ORB publications (queue length > 1)
-	uORB::PublicationQueued<gps_inject_data_s>	_gps_inject_data_pub{ORB_ID(gps_inject_data)};
-	uORB::PublicationQueued<transponder_report_s>	_transponder_report_pub{ORB_ID(transponder_report)};
-	uORB::PublicationQueued<vehicle_command_ack_s>	_cmd_ack_pub{ORB_ID(vehicle_command_ack)};
-	uORB::PublicationQueued<vehicle_command_s>	_cmd_pub{ORB_ID(vehicle_command)};
+	uORB::Publication<gps_inject_data_s>	_gps_inject_data_pub{ORB_ID(gps_inject_data)};
+	uORB::Publication<transponder_report_s>	_transponder_report_pub{ORB_ID(transponder_report)};
+	uORB::Publication<vehicle_command_ack_s>	_cmd_ack_pub{ORB_ID(vehicle_command_ack)};
+	uORB::Publication<vehicle_command_s>	_cmd_pub{ORB_ID(vehicle_command)};
 
 	// ORB subscriptions
 	uORB::Subscription	_actuator_armed_sub{ORB_ID(actuator_armed)};
 	uORB::Subscription	_control_mode_sub{ORB_ID(vehicle_control_mode)};
-	uORB::Subscription	_parameter_update_sub{ORB_ID(parameter_update)};
 	uORB::Subscription	_vehicle_attitude_sub{ORB_ID(vehicle_attitude)};
 	uORB::Subscription	_vehicle_local_position_sub{ORB_ID(vehicle_local_position)};
 	uORB::Subscription	_vehicle_status_sub{ORB_ID(vehicle_status)};
+
+	uORB::SubscriptionInterval _parameter_update_sub{ORB_ID(parameter_update), 1_s};
 
 	// hil_sensor and hil_state_quaternion
 	enum SensorSource {
@@ -321,6 +430,9 @@ private:
 
 	hrt_abstime			_last_utm_global_pos_com{0};
 
+	float 				_offb_cruising_speed_mc{-1.0f};
+	float 				_offb_cruising_speed_fw{-1.0f};
+
 	// Allocated if needed.
 	TunePublisher *_tune_publisher{nullptr};
 
@@ -346,7 +458,6 @@ private:
 		(ParamFloat<px4::params::BAT_CRIT_THR>)     _param_bat_crit_thr,
 		(ParamFloat<px4::params::BAT_EMERGEN_THR>)  _param_bat_emergen_thr,
 		(ParamFloat<px4::params::BAT_LOW_THR>)      _param_bat_low_thr,
-		(ParamInt<px4::params::COM_FLIGHT_UUID>)    _param_com_flight_uuid,
 		(ParamFloat<px4::params::SENS_FLOW_MAXHGT>) _param_sens_flow_maxhgt,
 		(ParamFloat<px4::params::SENS_FLOW_MAXR>)   _param_sens_flow_maxr,
 		(ParamFloat<px4::params::SENS_FLOW_MINHGT>) _param_sens_flow_minhgt,

@@ -14,9 +14,9 @@ then
 	then
 		param set SYS_BL_UPDATE 0
 		param save
-		echo "BL update..." >> $LOG_FILE
+		echo "BL update..."
 		bl_update $BL_FILE
-		echo "BL update done" >> $LOG_FILE
+		echo "BL update done"
 		reboot
 	fi
 fi
@@ -24,6 +24,12 @@ unset BL_FILE
 
 if [ $AUTOCNF = yes ]
 then
+	# Multi-EKF
+	param set EKF2_MULTI_IMU 3
+	param set SENS_IMU_MODE 0
+	param set EKF2_MULTI_MAG 3
+	param set SENS_MAG_MODE 0
+
 	# Enable IMU thermal control
 	param set SENS_EN_THERMAL 1
 fi
